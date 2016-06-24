@@ -1,0 +1,11 @@
+.node_shell
+/node_modules/
+/_site/
+spec/*.js
+spec/browser/*.js
+spec/result.xml
+docs_tmp/
+docs/
+npm-debug.log
+.DS_Store
+.noflo.json
