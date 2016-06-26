@@ -12732,16 +12732,12 @@
 	      this.autoOrdering = (_ref1 = options.autoOrdering) != null ? _ref1 : null;
 	      this.outputQ = [];
 	      this.activateOnInput = (_ref2 = options.activateOnInput) != null ? _ref2 : true;
-	      this.forwardBracketsFrom = ['in'];
-	      this.forwardBracketsTo = ['out', 'error'];
+	      this.forwardBrackets = {
+	        "in": ['out', 'error']
+	      };
 	      this.bracketCounter = {};
-	      this.bracketBuffer = {};
-	      this.fwdBracketCounter = {};
-	      if ('forwardBracketsFrom' in options) {
-	        this.forwardBracketsFrom = options.forwardBracketsFrom;
-	      }
-	      if ('forwardBracketsTo' in options) {
-	        this.forwardBracketsTo = options.forwardBracketsTo;
+	      if ('forwardBrackets' in options) {
+	        this.forwardBrackets = options.forwardBrackets;
 	      }
 	      if (typeof options.process === 'function') {
 	        this.process(options.process);
@@ -12815,68 +12811,30 @@
 	    };
 
 	    Component.prototype.prepareForwarding = function() {
-	      var inPort, p, _i, _len, _ref;
-	      this.forwardBracketsFrom = (function() {
-	        var _i, _len, _ref, _results;
-	        _ref = this.forwardBracketsFrom;
-	        _results = [];
-	        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-	          p = _ref[_i];
-	          if (p in this.inPorts.ports) {
-	            _results.push(p);
+	      var inPort, outPort, outPorts, tmp, _i, _len, _ref, _results;
+	      _ref = this.forwardBrackets;
+	      _results = [];
+	      for (inPort in _ref) {
+	        outPorts = _ref[inPort];
+	        if (!(inPort in this.inPorts.ports)) {
+	          delete this.forwardBrackets[inPort];
+	          continue;
+	        }
+	        tmp = [];
+	        for (_i = 0, _len = outPorts.length; _i < _len; _i++) {
+	          outPort = outPorts[_i];
+	          if (outPort in this.outPorts.ports) {
+	            tmp.push(outPort);
 	          }
 	        }
-	        return _results;
-	      }).call(this);
-	      _ref = this.forwardBracketsFrom;
-	      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-	        inPort = _ref[_i];
-	        this.bracketCounter[inPort] = 0;
-	      }
-	      return this.forwardBracketsTo = (function() {
-	        var _j, _len1, _ref1, _results;
-	        _ref1 = this.forwardBracketsTo;
-	        _results = [];
-	        for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
-	          p = _ref1[_j];
-	          if (p in this.outPorts.ports) {
-	            _results.push(p);
-	          }
+	        if (tmp.length === 0) {
+	          _results.push(delete this.forwardBrackets[inPort]);
+	        } else {
+	          this.forwardBrackets[inPort] = tmp;
+	          _results.push(this.bracketCounter[inPort] = 0);
 	        }
-	        return _results;
-	      }).call(this);
-	    };
-
-	    Component.prototype.incFwdCounter = function(scope, port) {
-	      if (!(scope in this.fwdBracketCounter)) {
-	        this.fwdBracketCounter[scope] = {};
 	      }
-	      if (!(port in this.fwdBracketCounter[scope])) {
-	        this.fwdBracketCounter[scope][port] = 0;
-	      }
-	      return this.fwdBracketCounter[scope][port]++;
-	    };
-
-	    Component.prototype.decFwdCounter = function(scope, port) {
-	      var _ref;
-	      if (!((_ref = this.fwdBracketCounter[scope]) != null ? _ref[port] : void 0)) {
-	        return;
-	      }
-	      this.fwdBracketCounter[scope][port]--;
-	      if (this.fwdBracketCounter[scope][port] === 0) {
-	        delete this.fwdBracketCounter[scope][port];
-	      }
-	      if (Object.keys(this.fwdBracketCounter[scope]).length === 0) {
-	        return delete this.fwdBracketCounter[scope];
-	      }
-	    };
-
-	    Component.prototype.getFwdCounter = function(scope, port) {
-	      var _ref;
-	      if (!((_ref = this.fwdBracketCounter[scope]) != null ? _ref[port] : void 0)) {
-	        return 0;
-	      }
-	      return this.fwdBracketCounter[scope][port];
+	      return _results;
 	    };
 
 	    Component.prototype.process = function(handle) {
@@ -12908,44 +12866,35 @@
 	    };
 
 	    Component.prototype.handleIP = function(ip, port) {
-	      var count, input, outPort, output, outputEntry, result, _ref;
+	      var input, outPort, output, outputEntry, result, _i, _len, _ref;
 	      if (ip.type === 'openBracket') {
 	        if (this.autoOrdering === null) {
 	          this.autoOrdering = true;
 	        }
 	        this.bracketCounter[port.name]++;
 	      }
-	      if (this.forwardBracketsFrom.indexOf(port.name) !== -1 && (ip.type === 'openBracket' || ip.type === 'closeBracket')) {
-	        if (!(ip.scope in this.bracketBuffer)) {
-	          this.bracketBuffer[ip.scope] = [];
-	        }
-	        if (ip.type === 'closeBracket' && this.bracketBuffer[ip.scope].length === 0) {
-	          outputEntry = {
-	            __resolved: true
-	          };
-	          _ref = this.fwdBracketCounter[ip.scope];
-	          for (outPort in _ref) {
-	            count = _ref[outPort];
-	            if (count > 0) {
-	              if (!(outPort in outputEntry)) {
-	                outputEntry[outPort] = [];
-	              }
-	              outputEntry[outPort].push(ip);
-	              this.decFwdCounter(ip.scope, outPort);
-	            }
+	      if (port.name in this.forwardBrackets && (ip.type === 'openBracket' || ip.type === 'closeBracket')) {
+	        outputEntry = {
+	          __resolved: true,
+	          __forwarded: true,
+	          __type: ip.type,
+	          __scope: ip.scope
+	        };
+	        _ref = this.forwardBrackets[port.name];
+	        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+	          outPort = _ref[_i];
+	          if (!(outPort in outputEntry)) {
+	            outputEntry[outPort] = [];
 	          }
-	          if (Object.keys(outputEntry).length > 1) {
-	            this.outputQ.push(outputEntry);
-	            this.processOutputQueue();
-	          }
-	        } else {
-	          this.bracketBuffer[ip.scope].push(ip);
+	          outputEntry[outPort].push(ip);
 	        }
 	        if (ip.scope != null) {
 	          port.scopedBuffer[ip.scope].pop();
 	        } else {
 	          port.buffer.pop();
 	        }
+	        this.outputQ.push(outputEntry);
+	        this.processOutputQueue();
 	        return;
 	      }
 	      if (!port.options.triggering) {
@@ -13198,8 +13147,6 @@
 	      this.nodeInstance = nodeInstance;
 	      this.result = result;
 	      this.scope = this.ip.scope;
-	      this.bracketsToForward = null;
-	      this.forwardedBracketsTo = [];
 	    }
 
 	    ProcessOutput.prototype.activate = function() {
@@ -13221,20 +13168,14 @@
 	      }
 	      if ('error' in this.ports && (this.ports.error.isAttached() || !this.ports.error.isRequired())) {
 	        if (multiple) {
-	          this.send({
-	            error: new IP('openBracket')
-	          });
+	          this.sendIP('error', new IP('openBracket'));
 	        }
 	        for (_i = 0, _len = err.length; _i < _len; _i++) {
 	          e = err[_i];
-	          this.send({
-	            error: e
-	          });
+	          this.sendIP('error', e);
 	        }
 	        if (multiple) {
-	          return this.send({
-	            error: new IP('closeBracket')
-	          });
+	          return this.sendIP('error', new IP('closeBracket'));
 	        }
 	      } else {
 	        _results = [];
@@ -13266,46 +13207,8 @@
 	      }
 	    };
 
-	    ProcessOutput.prototype.prepareOpenBrackets = function() {
-	      var hasOpening, ip, _ref, _results;
-	      this.bracketsToForward = [];
-	      hasOpening = false;
-	      _results = [];
-	      while (((_ref = this.nodeInstance.bracketBuffer[this.scope]) != null ? _ref.length : void 0) > 0) {
-	        ip = this.nodeInstance.bracketBuffer[this.scope][0];
-	        if (ip.type === 'openBracket') {
-	          this.bracketsToForward.push(this.nodeInstance.bracketBuffer[this.scope].shift());
-	          _results.push(hasOpening = true);
-	        } else {
-	          if (hasOpening) {
-	            break;
-	          }
-	          _results.push(this.bracketsToForward.push(this.nodeInstance.bracketBuffer[this.scope].shift()));
-	        }
-	      }
-	      return _results;
-	    };
-
-	    ProcessOutput.prototype.prepareCloseBrackets = function() {
-	      var ip, _ref, _results;
-	      this.bracketsToForward = [];
-	      _results = [];
-	      while (((_ref = this.nodeInstance.bracketBuffer[this.scope]) != null ? _ref.length : void 0) > 0) {
-	        ip = this.nodeInstance.bracketBuffer[this.scope][0];
-	        if (ip.type === 'closeBracket') {
-	          _results.push(this.bracketsToForward.push(this.nodeInstance.bracketBuffer[this.scope].shift()));
-	        } else {
-	          break;
-	        }
-	      }
-	      return _results;
-	    };
-
 	    ProcessOutput.prototype.send = function(outputMap) {
-	      var componentPorts, ip, mapIsInPorts, packet, port, _i, _j, _len, _len1, _ref, _ref1, _results;
-	      if (!this.bracketsToForward) {
-	        this.prepareOpenBrackets();
-	      }
+	      var componentPorts, mapIsInPorts, packet, port, _i, _len, _ref, _results;
 	      if ((this.nodeInstance.ordered || this.nodeInstance.autoOrdering) && !('__resolved' in this.result)) {
 	        this.activate();
 	      }
@@ -13325,26 +13228,12 @@
 	        }
 	      }
 	      if (componentPorts.length === 1 && !mapIsInPorts) {
-	        ip = outputMap;
-	        outputMap = {};
-	        outputMap[componentPorts[0]] = ip;
+	        this.sendIP(componentPorts[0], outputMap);
+	        return;
 	      }
 	      _results = [];
 	      for (port in outputMap) {
 	        packet = outputMap[port];
-	        if (this.nodeInstance.forwardBracketsTo.indexOf(port) !== -1 && this.forwardedBracketsTo.indexOf(port) === -1) {
-	          _ref1 = this.bracketsToForward;
-	          for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
-	            ip = _ref1[_j];
-	            this.sendIP(port, ip);
-	            if (ip.type === 'openBracket') {
-	              this.nodeInstance.incFwdCounter(ip.scope, port);
-	            } else {
-	              this.nodeInstance.decFwdCounter(ip.scope, port);
-	            }
-	          }
-	          this.forwardedBracketsTo.push(port);
-	        }
 	        _results.push(this.sendIP(port, packet));
 	      }
 	      return _results;
@@ -13368,35 +13257,14 @@
 	        this.ip[key] = val;
 	      }
 	      this.ip.data = data;
-	      return this.sendDone({
-	        out: this.ip
-	      });
+	      this.sendIP('out', this.ip);
+	      return this.done();
 	    };
 
 	    ProcessOutput.prototype.done = function(error) {
-	      var ip, port, _i, _j, _len, _len1, _ref, _ref1;
 	      if (error) {
 	        this.error(error);
 	      }
-	      this.prepareCloseBrackets();
-	      if (this.bracketsToForward.length > 0) {
-	        _ref = this.forwardedBracketsTo;
-	        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-	          port = _ref[_i];
-	          _ref1 = this.bracketsToForward;
-	          for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
-	            ip = _ref1[_j];
-	            this.sendIP(port, ip);
-	            if (ip.type === 'openBracket') {
-	              this.nodeInstance.incFwdCounter(ip.scope, port);
-	            } else {
-	              this.nodeInstance.decFwdCounter(ip.scope, port);
-	            }
-	          }
-	        }
-	        this.forwardedBracketsTo = [];
-	      }
-	      this.bracketsToForward = null;
 	      if (this.nodeInstance.ordered || this.nodeInstance.autoOrdering) {
 	        this.result.__resolved = true;
 	        this.nodeInstance.processOutputQueue();
@@ -16146,16 +16014,12 @@
 	    this.autoOrdering = (ref1 = options.autoOrdering) != null ? ref1 : null;
 	    this.outputQ = [];
 	    this.activateOnInput = (ref2 = options.activateOnInput) != null ? ref2 : true;
-	    this.forwardBracketsFrom = ['in'];
-	    this.forwardBracketsTo = ['out', 'error'];
+	    this.forwardBrackets = {
+	      "in": ['out', 'error']
+	    };
 	    this.bracketCounter = {};
-	    this.bracketBuffer = {};
-	    this.fwdBracketCounter = {};
-	    if ('forwardBracketsFrom' in options) {
-	      this.forwardBracketsFrom = options.forwardBracketsFrom;
-	    }
-	    if ('forwardBracketsTo' in options) {
-	      this.forwardBracketsTo = options.forwardBracketsTo;
+	    if ('forwardBrackets' in options) {
+	      this.forwardBrackets = options.forwardBrackets;
 	    }
 	    if (typeof options.process === 'function') {
 	      this.process(options.process);
@@ -16229,68 +16093,30 @@
 	  };
 
 	  Component.prototype.prepareForwarding = function() {
-	    var i, inPort, len, p, ref;
-	    this.forwardBracketsFrom = (function() {
-	      var i, len, ref, results;
-	      ref = this.forwardBracketsFrom;
-	      results = [];
-	      for (i = 0, len = ref.length; i < len; i++) {
-	        p = ref[i];
-	        if (p in this.inPorts.ports) {
-	          results.push(p);
+	    var i, inPort, len, outPort, outPorts, ref, results, tmp;
+	    ref = this.forwardBrackets;
+	    results = [];
+	    for (inPort in ref) {
+	      outPorts = ref[inPort];
+	      if (!(inPort in this.inPorts.ports)) {
+	        delete this.forwardBrackets[inPort];
+	        continue;
+	      }
+	      tmp = [];
+	      for (i = 0, len = outPorts.length; i < len; i++) {
+	        outPort = outPorts[i];
+	        if (outPort in this.outPorts.ports) {
+	          tmp.push(outPort);
 	        }
 	      }
-	      return results;
-	    }).call(this);
-	    ref = this.forwardBracketsFrom;
-	    for (i = 0, len = ref.length; i < len; i++) {
-	      inPort = ref[i];
-	      this.bracketCounter[inPort] = 0;
-	    }
-	    return this.forwardBracketsTo = (function() {
-	      var j, len1, ref1, results;
-	      ref1 = this.forwardBracketsTo;
-	      results = [];
-	      for (j = 0, len1 = ref1.length; j < len1; j++) {
-	        p = ref1[j];
-	        if (p in this.outPorts.ports) {
-	          results.push(p);
-	        }
+	      if (tmp.length === 0) {
+	        results.push(delete this.forwardBrackets[inPort]);
+	      } else {
+	        this.forwardBrackets[inPort] = tmp;
+	        results.push(this.bracketCounter[inPort] = 0);
 	      }
-	      return results;
-	    }).call(this);
-	  };
-
-	  Component.prototype.incFwdCounter = function(scope, port) {
-	    if (!(scope in this.fwdBracketCounter)) {
-	      this.fwdBracketCounter[scope] = {};
 	    }
-	    if (!(port in this.fwdBracketCounter[scope])) {
-	      this.fwdBracketCounter[scope][port] = 0;
-	    }
-	    return this.fwdBracketCounter[scope][port]++;
-	  };
-
-	  Component.prototype.decFwdCounter = function(scope, port) {
-	    var ref;
-	    if (!((ref = this.fwdBracketCounter[scope]) != null ? ref[port] : void 0)) {
-	      return;
-	    }
-	    this.fwdBracketCounter[scope][port]--;
-	    if (this.fwdBracketCounter[scope][port] === 0) {
-	      delete this.fwdBracketCounter[scope][port];
-	    }
-	    if (Object.keys(this.fwdBracketCounter[scope]).length === 0) {
-	      return delete this.fwdBracketCounter[scope];
-	    }
-	  };
-
-	  Component.prototype.getFwdCounter = function(scope, port) {
-	    var ref;
-	    if (!((ref = this.fwdBracketCounter[scope]) != null ? ref[port] : void 0)) {
-	      return 0;
-	    }
-	    return this.fwdBracketCounter[scope][port];
+	    return results;
 	  };
 
 	  Component.prototype.process = function(handle) {
@@ -16322,44 +16148,35 @@
 	  };
 
 	  Component.prototype.handleIP = function(ip, port) {
-	    var count, input, outPort, output, outputEntry, ref, result;
+	    var i, input, len, outPort, output, outputEntry, ref, result;
 	    if (ip.type === 'openBracket') {
 	      if (this.autoOrdering === null) {
 	        this.autoOrdering = true;
 	      }
 	      this.bracketCounter[port.name]++;
 	    }
-	    if (this.forwardBracketsFrom.indexOf(port.name) !== -1 && (ip.type === 'openBracket' || ip.type === 'closeBracket')) {
-	      if (!(ip.scope in this.bracketBuffer)) {
-	        this.bracketBuffer[ip.scope] = [];
-	      }
-	      if (ip.type === 'closeBracket' && this.bracketBuffer[ip.scope].length === 0) {
-	        outputEntry = {
-	          __resolved: true
-	        };
-	        ref = this.fwdBracketCounter[ip.scope];
-	        for (outPort in ref) {
-	          count = ref[outPort];
-	          if (count > 0) {
-	            if (!(outPort in outputEntry)) {
-	              outputEntry[outPort] = [];
-	            }
-	            outputEntry[outPort].push(ip);
-	            this.decFwdCounter(ip.scope, outPort);
-	          }
+	    if (port.name in this.forwardBrackets && (ip.type === 'openBracket' || ip.type === 'closeBracket')) {
+	      outputEntry = {
+	        __resolved: true,
+	        __forwarded: true,
+	        __type: ip.type,
+	        __scope: ip.scope
+	      };
+	      ref = this.forwardBrackets[port.name];
+	      for (i = 0, len = ref.length; i < len; i++) {
+	        outPort = ref[i];
+	        if (!(outPort in outputEntry)) {
+	          outputEntry[outPort] = [];
 	        }
-	        if (Object.keys(outputEntry).length > 1) {
-	          this.outputQ.push(outputEntry);
-	          this.processOutputQueue();
-	        }
-	      } else {
-	        this.bracketBuffer[ip.scope].push(ip);
+	        outputEntry[outPort].push(ip);
 	      }
 	      if (ip.scope != null) {
 	        port.scopedBuffer[ip.scope].pop();
 	      } else {
 	        port.buffer.pop();
 	      }
+	      this.outputQ.push(outputEntry);
+	      this.processOutputQueue();
 	      return;
 	    }
 	    if (!port.options.triggering) {
@@ -16612,8 +16429,6 @@
 	    this.nodeInstance = nodeInstance;
 	    this.result = result1;
 	    this.scope = this.ip.scope;
-	    this.bracketsToForward = null;
-	    this.forwardedBracketsTo = [];
 	  }
 
 	  ProcessOutput.prototype.activate = function() {
@@ -16635,20 +16450,14 @@
 	    }
 	    if ('error' in this.ports && (this.ports.error.isAttached() || !this.ports.error.isRequired())) {
 	      if (multiple) {
-	        this.send({
-	          error: new IP('openBracket')
-	        });
+	        this.sendIP('error', new IP('openBracket'));
 	      }
 	      for (i = 0, len = err.length; i < len; i++) {
 	        e = err[i];
-	        this.send({
-	          error: e
-	        });
+	        this.sendIP('error', e);
 	      }
 	      if (multiple) {
-	        return this.send({
-	          error: new IP('closeBracket')
-	        });
+	        return this.sendIP('error', new IP('closeBracket'));
 	      }
 	    } else {
 	      results = [];
@@ -16680,46 +16489,8 @@
 	    }
 	  };
 
-	  ProcessOutput.prototype.prepareOpenBrackets = function() {
-	    var hasOpening, ip, ref, results;
-	    this.bracketsToForward = [];
-	    hasOpening = false;
-	    results = [];
-	    while (((ref = this.nodeInstance.bracketBuffer[this.scope]) != null ? ref.length : void 0) > 0) {
-	      ip = this.nodeInstance.bracketBuffer[this.scope][0];
-	      if (ip.type === 'openBracket') {
-	        this.bracketsToForward.push(this.nodeInstance.bracketBuffer[this.scope].shift());
-	        results.push(hasOpening = true);
-	      } else {
-	        if (hasOpening) {
-	          break;
-	        }
-	        results.push(this.bracketsToForward.push(this.nodeInstance.bracketBuffer[this.scope].shift()));
-	      }
-	    }
-	    return results;
-	  };
-
-	  ProcessOutput.prototype.prepareCloseBrackets = function() {
-	    var ip, ref, results;
-	    this.bracketsToForward = [];
-	    results = [];
-	    while (((ref = this.nodeInstance.bracketBuffer[this.scope]) != null ? ref.length : void 0) > 0) {
-	      ip = this.nodeInstance.bracketBuffer[this.scope][0];
-	      if (ip.type === 'closeBracket') {
-	        results.push(this.bracketsToForward.push(this.nodeInstance.bracketBuffer[this.scope].shift()));
-	      } else {
-	        break;
-	      }
-	    }
-	    return results;
-	  };
-
 	  ProcessOutput.prototype.send = function(outputMap) {
-	    var componentPorts, i, ip, j, len, len1, mapIsInPorts, packet, port, ref, ref1, results;
-	    if (!this.bracketsToForward) {
-	      this.prepareOpenBrackets();
-	    }
+	    var componentPorts, i, len, mapIsInPorts, packet, port, ref, results;
 	    if ((this.nodeInstance.ordered || this.nodeInstance.autoOrdering) && !('__resolved' in this.result)) {
 	      this.activate();
 	    }
@@ -16739,26 +16510,12 @@
 	      }
 	    }
 	    if (componentPorts.length === 1 && !mapIsInPorts) {
-	      ip = outputMap;
-	      outputMap = {};
-	      outputMap[componentPorts[0]] = ip;
+	      this.sendIP(componentPorts[0], outputMap);
+	      return;
 	    }
 	    results = [];
 	    for (port in outputMap) {
 	      packet = outputMap[port];
-	      if (this.nodeInstance.forwardBracketsTo.indexOf(port) !== -1 && this.forwardedBracketsTo.indexOf(port) === -1) {
-	        ref1 = this.bracketsToForward;
-	        for (j = 0, len1 = ref1.length; j < len1; j++) {
-	          ip = ref1[j];
-	          this.sendIP(port, ip);
-	          if (ip.type === 'openBracket') {
-	            this.nodeInstance.incFwdCounter(ip.scope, port);
-	          } else {
-	            this.nodeInstance.decFwdCounter(ip.scope, port);
-	          }
-	        }
-	        this.forwardedBracketsTo.push(port);
-	      }
 	      results.push(this.sendIP(port, packet));
 	    }
 	    return results;
@@ -16782,35 +16539,14 @@
 	      this.ip[key] = val;
 	    }
 	    this.ip.data = data;
-	    return this.sendDone({
-	      out: this.ip
-	    });
+	    this.sendIP('out', this.ip);
+	    return this.done();
 	  };
 
 	  ProcessOutput.prototype.done = function(error) {
-	    var i, ip, j, len, len1, port, ref, ref1;
 	    if (error) {
 	      this.error(error);
 	    }
-	    this.prepareCloseBrackets();
-	    if (this.bracketsToForward.length > 0) {
-	      ref = this.forwardedBracketsTo;
-	      for (i = 0, len = ref.length; i < len; i++) {
-	        port = ref[i];
-	        ref1 = this.bracketsToForward;
-	        for (j = 0, len1 = ref1.length; j < len1; j++) {
-	          ip = ref1[j];
-	          this.sendIP(port, ip);
-	          if (ip.type === 'openBracket') {
-	            this.nodeInstance.incFwdCounter(ip.scope, port);
-	          } else {
-	            this.nodeInstance.decFwdCounter(ip.scope, port);
-	          }
-	        }
-	      }
-	      this.forwardedBracketsTo = [];
-	    }
-	    this.bracketsToForward = null;
 	    if (this.nodeInstance.ordered || this.nodeInstance.autoOrdering) {
 	      this.result.__resolved = true;
 	      this.nodeInstance.processOutputQueue();

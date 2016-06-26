@@ -1109,8 +1109,9 @@ describe 'Component', ->
             datatype: 'string'
           error:
             datatype: 'object'
-        forwardBracketsFrom: ['msg', 'delay']
-        forwardBracketsTo: ['out', 'error']
+        forwardBrackets:
+          msg: ['out', 'error']
+          delay: ['error']
         process: (input, output) ->
           return unless input.has 'msg', 'delay'
           [msg, delay] = input.getData 'msg', 'delay'
@@ -1142,13 +1143,7 @@ describe 'Component', ->
           when 0
             chai.expect(ip.type).to.equal 'openBracket'
             chai.expect(ip.data).to.equal 'msg'
-          when 1
-            chai.expect(ip.type).to.equal 'openBracket'
-            chai.expect(ip.data).to.equal 'delay'
           when 5
-            chai.expect(ip.type).to.equal 'closeBracket'
-            chai.expect(ip.data).to.equal 'delay'
-          when 6
             chai.expect(ip.type).to.equal 'closeBracket'
             chai.expect(ip.data).to.equal 'msg'
           else src = sample[count - 1]
