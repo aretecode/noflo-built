@@ -12731,6 +12731,7 @@
 	      this.ordered = (_ref = options.ordered) != null ? _ref : false;
 	      this.autoOrdering = (_ref1 = options.autoOrdering) != null ? _ref1 : null;
 	      this.outputQ = [];
+	      this.fullOutputQ = [];
 	      this.activateOnInput = (_ref2 = options.activateOnInput) != null ? _ref2 : true;
 	      this.forwardBrackets = {
 	        "in": ['out', 'error']
@@ -12867,6 +12868,16 @@
 
 	    Component.prototype.handleIP = function(ip, port) {
 	      var input, outPort, output, outputEntry, result, _i, _len, _ref;
+	      this.fullOutputQ.push(ip);
+	      if (port.options.data) {
+	        result = {};
+	        input = new ProcessInput(this.inPorts, ip, this, port, result);
+	        output = new ProcessOutput(this.outPorts, ip, this, result);
+	        this.load++;
+	        this.handle(input, output, function() {
+	          return output.done();
+	        });
+	      }
 	      if (ip.type === 'openBracket') {
 	        if (this.autoOrdering === null) {
 	          this.autoOrdering = true;
@@ -12897,16 +12908,15 @@
 	        this.processOutputQueue();
 	        return;
 	      }
-	      if (!port.options.triggering) {
-	        return;
+	      if (port.options.triggering) {
+	        result = {};
+	        input = new ProcessInput(this.inPorts, ip, this, port, result);
+	        output = new ProcessOutput(this.outPorts, ip, this, result);
+	        this.load++;
+	        return this.handle(input, output, function() {
+	          return output.done();
+	        });
 	      }
-	      result = {};
-	      input = new ProcessInput(this.inPorts, ip, this, port, result);
-	      output = new ProcessOutput(this.outPorts, ip, this, result);
-	      this.load++;
-	      return this.handle(input, output, function() {
-	        return output.done();
-	      });
 	    };
 
 	    Component.prototype.processOutputQueue = function() {
@@ -13037,6 +13047,34 @@
 	        _results.push((_ref1 = ip != null ? ip.data : void 0) != null ? _ref1 : void 0);
 	      }
 	      return _results;
+	    };
+
+	    ProcessInput.prototype.hasDataStream = function(port) {
+	      var packet, received, _i, _len, _ref;
+	      if (this.nodeInstance.fullOutputQ.length === 0) {
+	        return false;
+	      }
+	      received = 0;
+	      _ref = this.nodeInstance.fullOutputQ;
+	      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+	        packet = _ref[_i];
+	        if (packet.type === 'openBracket') {
+	          ++received;
+	        } else if (packet.type === 'closeBracket') {
+	          --received;
+	        }
+	      }
+	      if (received === 0) {
+	        this.nodeInstance.fullOutputQ = [];
+	        return true;
+	      }
+	      return false;
+	    };
+
+	    ProcessInput.prototype.getDataStream = function(port) {
+	      return this.buffer.get(port).map(function(ip) {
+	        return ip.data;
+	      });
 	    };
 
 	    ProcessInput.prototype.hasStream = function(port) {
@@ -16013,6 +16051,7 @@
 	    this.ordered = (ref = options.ordered) != null ? ref : false;
 	    this.autoOrdering = (ref1 = options.autoOrdering) != null ? ref1 : null;
 	    this.outputQ = [];
+	    this.fullOutputQ = [];
 	    this.activateOnInput = (ref2 = options.activateOnInput) != null ? ref2 : true;
 	    this.forwardBrackets = {
 	      "in": ['out', 'error']
@@ -16149,6 +16188,16 @@
 
 	  Component.prototype.handleIP = function(ip, port) {
 	    var i, input, len, outPort, output, outputEntry, ref, result;
+	    this.fullOutputQ.push(ip);
+	    if (port.options.data) {
+	      result = {};
+	      input = new ProcessInput(this.inPorts, ip, this, port, result);
+	      output = new ProcessOutput(this.outPorts, ip, this, result);
+	      this.load++;
+	      this.handle(input, output, function() {
+	        return output.done();
+	      });
+	    }
 	    if (ip.type === 'openBracket') {
 	      if (this.autoOrdering === null) {
 	        this.autoOrdering = true;
@@ -16179,16 +16228,15 @@
 	      this.processOutputQueue();
 	      return;
 	    }
-	    if (!port.options.triggering) {
-	      return;
+	    if (port.options.triggering) {
+	      result = {};
+	      input = new ProcessInput(this.inPorts, ip, this, port, result);
+	      output = new ProcessOutput(this.outPorts, ip, this, result);
+	      this.load++;
+	      return this.handle(input, output, function() {
+	        return output.done();
+	      });
 	    }
-	    result = {};
-	    input = new ProcessInput(this.inPorts, ip, this, port, result);
-	    output = new ProcessOutput(this.outPorts, ip, this, result);
-	    this.load++;
-	    return this.handle(input, output, function() {
-	      return output.done();
-	    });
 	  };
 
 	  Component.prototype.processOutputQueue = function() {
@@ -16319,6 +16367,34 @@
 	      results.push((ref1 = ip != null ? ip.data : void 0) != null ? ref1 : void 0);
 	    }
 	    return results;
+	  };
+
+	  ProcessInput.prototype.hasDataStream = function(port) {
+	    var i, len, packet, received, ref;
+	    if (this.nodeInstance.fullOutputQ.length === 0) {
+	      return false;
+	    }
+	    received = 0;
+	    ref = this.nodeInstance.fullOutputQ;
+	    for (i = 0, len = ref.length; i < len; i++) {
+	      packet = ref[i];
+	      if (packet.type === 'openBracket') {
+	        ++received;
+	      } else if (packet.type === 'closeBracket') {
+	        --received;
+	      }
+	    }
+	    if (received === 0) {
+	      this.nodeInstance.fullOutputQ = [];
+	      return true;
+	    }
+	    return false;
+	  };
+
+	  ProcessInput.prototype.getDataStream = function(port) {
+	    return this.buffer.get(port).map(function(ip) {
+	      return ip.data;
+	    });
 	  };
 
 	  ProcessInput.prototype.hasStream = function(port) {
