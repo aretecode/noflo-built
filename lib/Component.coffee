@@ -35,7 +35,7 @@ class Component extends EventEmitter
     @ordered = options.ordered ? false
     @autoOrdering = options.autoOrdering ? null
     @outputQ = []
-    @dataStream = []
+    @fullOutputQ = []
     @activateOnInput = options.activateOnInput ? true
     @forwardBrackets = in: ['out', 'error']
     @bracketCounter = {}
@@ -107,15 +107,9 @@ class Component extends EventEmitter
 
   # Handles an incoming IP object
   handleIP: (ip, port) ->
-    if port.options.data
-      # check if we have everything until "disconnect"
-      if ip.type is 'openBracket' or ip.type is 'closeBracket'
-        @dataStream[port.name] ?= 0
-      if ip.type is 'openBracket'
-        ++@dataStream[port.name]
-      if ip.type is 'closeBracket'
-        --@dataStream[port.name]
+    @fullOutputQ.push ip
 
+    if port.options.data
       result = {}
       input = new ProcessInput @inPorts, ip, @, port, result
       output = new ProcessOutput @outPorts, ip, @, result
@@ -216,62 +210,45 @@ class ProcessInput
       return ips?.data ? undefined
     (ip?.data ? undefined for ip in ips)
 
-  hasDataStream: (args...) ->
-    hasAll = true
-    for port in args
-      return false if @nodeInstance.dataStream[port] is null
-      if @nodeInstance.dataStream[port] isnt 0
-        hasAll = false
-    return hasAll
+  hasDataStream: (port) ->
+    return false if @nodeInstance.fullOutputQ.length is 0
+    # check if we have everything until "disconnect"
+    received = 0
+    for packet in @nodeInstance.fullOutputQ
+      if packet.type is 'openBracket'
+        ++received
+      else if packet.type is 'closeBracket'
+        --received
 
-  getDataStream: (args...) ->
-    all = []
-    for port in args
-      @nodeInstance.dataStream[port] = null
-      buffer = @buffer.get port
-      @buffer.filter port, (ip) -> false
+    if received is 0
+      @nodeInstance.fullOutputQ = []
+      return true
 
-      all.push (buffer
-        .filter (ip) -> ip.type is 'data'
-        .map (ip) -> ip.data)
+    return false
 
-    return all[0] if args.length is 1
-    return all
+  getDataStream: (port) ->
+    @buffer.get port
+      .map (ip) -> ip.data
 
-  hasStream: (args...) ->
-    hasAll = true
-    for port in args
-      buf = @buffer.get port
-      return false if buf.length is 0
-      # check if we have everything until "disconnect"
-      received = 0
-      for packet in buf
-        if packet.type is 'openBracket'
-          ++received
-        else if packet.type is 'closeBracket'
-          --received
-      if received isnt 0
-        hasAll = false
+  hasStream: (port) ->
+    buffer = @buffer.get port
+    return false if buffer.length is 0
+    # check if we have everything until "disconnect"
+    received = 0
+    for packet in buffer
+      if packet.type is 'openBracket'
+        ++received
+      else if packet.type is 'closeBracket'
+        --received
+    received is 0
 
-    return hasAll
-
-  getStream: (args...) ->
-    # if the last argument is a boolean, use it
-    withoutConnectAndDisconnect = false
-    if typeof args[args.length - 1] is 'boolean'
-      withoutConnectAndDisconnect = args.pop()
-
-    all = []
-    for port in args
-      buf = @buffer.get port
-      @buffer.filter port, (ip) -> false
-      if withoutConnectAndDisconnect
-        buf = buf.slice 1
-        buf.pop()
-      all.push buf
-
-    return all[0] if args.length is 1
-    return all
+  getStream: (port, withoutConnectAndDisconnect = false) ->
+    buf = @buffer.get port
+    @buffer.filter port, (ip) -> false
+    if withoutConnectAndDisconnect
+      buf = buf.slice 1
+      buf.pop()
+    buf
 
 class PortBuffer
   constructor: (@context) ->
@@ -297,26 +274,15 @@ class PortBuffer
 
   # Get a buffer (scoped or not) for a given port
   # if name is optional, use the current port
-  # function as the last argument, optional
-  get: (args...) ->
-    getBuffer = (name) =>
-      if @context.scope?
-        if name?
-          return @context.ports[name].scopedBuffer[@context.scope]
-        return @context.port.scopedBuffer[@context.scope]
+  get: (name = null) ->
+    if @context.scope?
       if name?
-        return @context.ports[name].buffer
-      return @context.port.buffer
+        return @context.ports[name].scopedBuffer[@context.scope]
+      return @context.port.scopedBuffer[@context.scope]
 
-    if args.length is 1
-      return getBuffer args[0]
-    if args.length is 0
-      return getBuffer()
-    if args.length > 1
-      all = []
-      for port in args
-        all.push getBuffer port
-      return all
+    if name?
+      return @context.ports[name].buffer
+    return @context.port.buffer
 
   # Find packets matching a callback and return them without modifying the buffer
   find: (name, cb) ->
