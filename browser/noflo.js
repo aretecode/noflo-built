@@ -16305,21 +16305,33 @@
 	  };
 
 	  ProcessInput.prototype.getData = function() {
-	    var args, i, ip, ips, len, ref, ref1, results;
+	    var args, datas, i, len, packet, port, ref;
 	    args = 1 <= arguments.length ? slice.call(arguments, 0) : [];
 	    if (!args.length) {
 	      args = ['in'];
 	    }
-	    ips = this.get.apply(this, args);
+	    datas = [];
+	    for (i = 0, len = args.length; i < len; i++) {
+	      port = args[i];
+	      packet = this.get(port);
+	      if (packet == null) {
+	        continue;
+	      }
+	      while (packet.type !== 'data') {
+	        packet = this.get(port);
+	      }
+	      packet = (ref = packet != null ? packet.data : void 0) != null ? ref : void 0;
+	      datas.push(packet);
+	      if (!((this.buffer.find(port, function(ip) {
+	        return ip.type === 'data';
+	      })).length > 0)) {
+	        this.buffer.set(port, []);
+	      }
+	    }
 	    if (args.length === 1) {
-	      return (ref = ips != null ? ips.data : void 0) != null ? ref : void 0;
+	      return datas.pop();
 	    }
-	    results = [];
-	    for (i = 0, len = ips.length; i < len; i++) {
-	      ip = ips[i];
-	      results.push((ref1 = ip != null ? ip.data : void 0) != null ? ref1 : void 0);
-	    }
-	    return results;
+	    return datas;
 	  };
 
 	  ProcessInput.prototype.hasDataStream = function() {
