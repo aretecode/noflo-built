@@ -377,7 +377,7 @@ class ProcessOutput
 
   # Sends a single IP object to a port
   sendIP: (port, packet) ->
-    if typeof packet isnt 'object' or IP.types.indexOf(packet.type) is -1
+    if typeof packet isnt 'object' or IP.types.indexOf(packet?.type) is -1
       ip = new IP 'data', packet
     else
       ip = packet
