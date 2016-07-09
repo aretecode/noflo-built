@@ -16558,7 +16558,7 @@
 
 	  ProcessOutput.prototype.sendIP = function(port, packet) {
 	    var ip;
-	    if (typeof packet !== 'object' || IP.types.indexOf(packet.type) === -1) {
+	    if (typeof packet !== 'object' || IP.types.indexOf(packet != null ? packet.type : void 0) === -1) {
 	      ip = new IP('data', packet);
 	    } else {
 	      ip = packet;
@@ -16592,7 +16592,7 @@
 	      if (port !== 'error' && port !== 'ports' && port !== '_callbacks') {
 	        componentPorts.push(port);
 	      }
-	      if (!mapIsInPorts && typeof outputMap === 'object' && Object.keys(outputMap).indexOf(port) !== -1) {
+	      if (!mapIsInPorts && (mapIsInPorts != null) && typeof outputMap === 'object' && Object.keys(outputMap).indexOf(port) !== -1) {
 	        mapIsInPorts = true;
 	      }
 	    }
