@@ -16592,7 +16592,7 @@
 	      if (port !== 'error' && port !== 'ports' && port !== '_callbacks') {
 	        componentPorts.push(port);
 	      }
-	      if (!mapIsInPorts && (mapIsInPorts != null) && typeof outputMap === 'object' && Object.keys(outputMap).indexOf(port) !== -1) {
+	      if (!mapIsInPorts && (outputMap != null) && typeof outputMap === 'object' && Object.keys(outputMap).indexOf(port) !== -1) {
 	        mapIsInPorts = true;
 	      }
 	    }
